@@ -20,15 +20,14 @@ public:
 #include <string.h>
 class Event {
 public:
-	Event(const Event& event)
-/*:		description(new char [strlen(event.description) + 1])*/{
+	Event(const Event& event):
+		description(new char [strlen(event.description) + 1]){
 		std::cout << "Copy constructor ran." << std::endl;
 		this->condition = event.condition;
 		//if (event.description != nullptr) {
-		//	strncpy(this->description, event.description, strlen(event.description));
+			strncpy(this->description, event.description, strlen(event.description));
 		//}
-		//this->description[strlen(event.description)] = '\0';
-		this->description = event.description;
+		this->description[strlen(event.description)] = '\0';
 	}
 	void swap(Event& lhs, Event& rhs) {
 		using std::swap;
@@ -36,10 +35,8 @@ public:
 		swap(lhs.description, rhs.description);
 	}
 	Event& operator=(Event other) {
-		std::cout << "Assignment construtor" << std::endl;
-		this->condition = other.condition;
-		this->description = other.description;
-		//swap(*this, other);
+		std::cout << "Assignment operator" << std::endl;
+		swap(*this, other);
 		return *this;
 	}
 	enum class Condition {
@@ -55,7 +52,7 @@ public:
 	}
 	~Event() {
 		std::cout << "Event destructor ran." << std::endl;
-		//delete this->description;
+		delete this->description;
 	}
 
 	Condition type() const {
@@ -142,8 +139,8 @@ public:
 
 	}
 	void execute() {
-		EventList events = input->pull();
 		std::cout << "Beginning of displaying events events:" << std::endl;
+		EventList events = input->pull();
 		for (Event& event : events) {
 			std::cout << "Event start" << std::endl;
 			std::cout << event.typeAsString() << std::endl;
