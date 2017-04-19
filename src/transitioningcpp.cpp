@@ -49,7 +49,24 @@ private:
 	Condition condition;
 };
 
-using EventList = std::vector<Event>;
+class EventList {
+public:
+	void push_back(Event event) {
+		events.push_back(event);
+	}
+	std::vector<Event>::iterator begin() {
+		return events.begin();
+	}
+	std::vector<Event>::iterator end() {
+		return events.end();
+	}
+
+	using value_type = std::vector<Event>::value_type;
+
+private:
+	std::vector<Event> events;
+
+};
 
 class Pipe {
 public:
