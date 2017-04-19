@@ -12,12 +12,20 @@
 using namespace std;
 static const char * conditionAsString[] { "Warning", "Caution", "Advisory" };
 
+class I_Filter {
+public:
+	virtual void execute() = 0;
+};
+
+#include <string.h>
 class Event {
 public:
 	Event() {
-		std::cout << "Empty constructor ran." << std::endl;
+
 	}
-	Event(const Event& event) {
+	Event(const Event& event, const char * description):
+		description(new char [strlen(description)]){
+		strncpy(this->description, description, strlen(description));
 		std::cout << "Copy constructor ran." << std::endl;
 		this->condition = event.condition;
 	}
@@ -35,10 +43,14 @@ public:
 	}
 	~Event() {
 		std::cout << "Event destructor ran." << std::endl;
+		//delete this->description;
 	}
 
 	Condition type() const {
 		return condition;
+	}
+	const char * what() {
+		return description;
 	}
 
 	const char * typeAsString() {
@@ -47,6 +59,7 @@ public:
 
 private:
 	Condition condition;
+	char * description;
 };
 
 class EventList {
@@ -81,7 +94,7 @@ private:
 };
 
 static std::random_device rd;     // only used once to initialise (seed) engine
-class Generator {
+class Generator : public I_Filter {
 public:
 	Generator(Pipe * output):output(output),
 		rng(rd()){    // random-number engine used (Mersenne-Twister in this case)
@@ -98,7 +111,9 @@ public:
 		for (auto i = 0; i < random_size; i++) {
 			int random_integer = uni(rng);
 			Event::Condition randomCondition(static_cast<Event::Condition>(random_integer));
-			Event randomEvent(randomCondition);
+			std::string desc(std::string("Event no :") +std::to_string(i));
+			Event randomEvent(randomCondition, desc.c_str());
+
 			randomEventList.push_back(randomEvent);
 		}
 		output->push(randomEventList);
@@ -108,7 +123,7 @@ private:
 	std::mt19937 rng;    // random-number engine used (Mersenne-Twister in this case)
 };
 
-class Display {
+class Display : public I_Filter{
 public:
 	Display(Pipe * input): input(input) {
 
@@ -118,12 +133,28 @@ public:
 		std::cout << "Beginning of displaying events events:" << std::endl;
 		for (auto& event : events) {
 			std::cout << event.typeAsString() << std::endl;
+			std::cout << event.what() << std::endl;
+
 		}
 		std::cout << "End of displaying events:" << std::endl;
 
 	}
 private:
 	Pipe * input;
+};
+
+class Pipeline {
+public:
+	void run() {
+		for (auto filter : filters){
+			filter->execute();
+		}
+	}
+	void add(I_Filter& filter) {
+		filters.push_back(&filter);
+	}
+private:
+	std::vector<I_Filter *> filters;
 };
 
 int main() {
@@ -133,9 +164,11 @@ int main() {
 	Generator generator(&pipe);
 	Display display(&pipe);
 
-	generator.execute();
-	display.execute();
+	Pipeline pipeline;
+	pipeline.add(generator);
+	pipeline.add(display);
 
+	pipeline.run();
 
 	return 0;
 }
