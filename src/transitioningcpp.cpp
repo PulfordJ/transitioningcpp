@@ -20,26 +20,38 @@ public:
 #include <string.h>
 class Event {
 public:
-	Event() {
-
-	}
-	Event(const Event& event, const char * description):
-		description(new char [strlen(description)]){
-		strncpy(this->description, description, strlen(description));
+	Event(const Event& event)
+/*:		description(new char [strlen(event.description) + 1])*/{
 		std::cout << "Copy constructor ran." << std::endl;
 		this->condition = event.condition;
+		//if (event.description != nullptr) {
+		//	strncpy(this->description, event.description, strlen(event.description));
+		//}
+		//this->description[strlen(event.description)] = '\0';
+		this->description = event.description;
 	}
-	Event& operator=(const Event& other) {
-		std::cout << "Assignment constructor" << std::endl;
+	void swap(Event& lhs, Event& rhs) {
+		using std::swap;
+		swap(lhs.condition, rhs.condition);
+		swap(lhs.description, rhs.description);
+	}
+	Event& operator=(Event other) {
+		std::cout << "Assignment construtor" << std::endl;
 		this->condition = other.condition;
+		this->description = other.description;
+		//swap(*this, other);
 		return *this;
 	}
 	enum class Condition {
 		WARNING, CAUTION, ADVISORY
 	};
-	Event(Condition condition) :
-			condition(condition) {
+	Event(Condition condition, const char * description) :
+			condition(condition),
+			description(new char [strlen(description) + 1]) {
+		strncpy(this->description, description, strlen(description));
+		this->description[strlen(description)] = '\0';
 		std::cout << "Event constructor ran." << std::endl;
+
 	}
 	~Event() {
 		std::cout << "Event destructor ran." << std::endl;
@@ -54,6 +66,7 @@ public:
 	}
 
 	const char * typeAsString() {
+		std::cout << static_cast<int>(condition);
 		return conditionAsString[static_cast<int>(condition)];
 	}
 
@@ -101,7 +114,7 @@ public:
 	}
 	void execute() {
 		//Make random event
-		std::uniform_int_distribution<int> uni(0,3); // guaranteed unbiased
+		std::uniform_int_distribution<int> uni(1,2); // guaranteed unbiased
 
 
 		EventList randomEventList;
@@ -131,10 +144,11 @@ public:
 	void execute() {
 		EventList events = input->pull();
 		std::cout << "Beginning of displaying events events:" << std::endl;
-		for (auto& event : events) {
+		for (Event& event : events) {
+			std::cout << "Event start" << std::endl;
 			std::cout << event.typeAsString() << std::endl;
 			std::cout << event.what() << std::endl;
-
+			std::cout << "Event end" << std::endl;
 		}
 		std::cout << "End of displaying events:" << std::endl;
 
@@ -169,6 +183,6 @@ int main() {
 	pipeline.add(display);
 
 	pipeline.run();
-
+	cout << "!!!Goodbye World!!!" << endl; // prints !!!Hello World!!!
 	return 0;
 }

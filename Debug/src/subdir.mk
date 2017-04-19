@@ -6,6 +6,9 @@
 CPP_SRCS += \
 ../src/transitioningcpp.cpp 
 
+O_SRCS += \
+../src/t.o 
+
 OBJS += \
 ./src/transitioningcpp.o 
 
