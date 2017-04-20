@@ -82,7 +82,7 @@ public:
 			std::cout << "EventList::~EventList()" << std::endl;
 	}
 
-	void push_back(T&& element);
+	void push_back(T element);
 
 	T pop_front() {
 		T element = std::move(bufferqueue.front());
@@ -99,7 +99,7 @@ private:
 };
 
 template<class T>
-void EventList<T>::push_back(T&& element) {
+void EventList<T>::push_back(T element) {
 	bufferqueue.emplace(std::move(element));
 }
 
@@ -130,20 +130,22 @@ public:
 		//Make random event
 		std::uniform_int_distribution<int> uni(1,2); // guaranteed unbiased
 		std::cout << "Creating randomEventList" << std::endl;
-		std::shared_ptr<EventList<Event>> randomEventList = std::make_shared<EventList<T>>();
+		std::shared_ptr<EventList<T>> randomEventList = std::make_shared<EventList<T>>();
 		int random_size = 1;//uni(rng);
 
 		for (auto i = 0; i < random_size; i++) {
 			int random_integer = uni(rng);
 			Event::Condition randomCondition(static_cast<Event::Condition>(random_integer));
 			std::string desc(std::string("Event no :") +std::to_string(i));
-			randomEventList->push_back(std::move(Event(randomCondition, desc.c_str())));
+			std::shared_ptr<Event> randomEvent = std::make_shared<Event>(randomCondition, desc.c_str());
+			//Event(randomCondition, desc.c_str());
+			randomEventList->push_back(randomEvent);
 		}
 
 		output->push(randomEventList);
 	}
 private:
-	Pipe<Event> * output;
+	Pipe<T> * output;
 	std::mt19937 rng;    // random-number engine used (Mersenne-Twister in this case)
 };
 
@@ -159,8 +161,8 @@ public:
 		while (!events->empty()){
 			T event = std::move(events->pop_front());
 			std::cout << "Event start" << std::endl;
-			std::cout << event.typeAsString() << std::endl;
-			std::cout << event.what() << std::endl;
+			std::cout << event->typeAsString() << std::endl;
+			std::cout << event->what() << std::endl;
 			std::cout << "Event end" << std::endl;
 		}
 		std::cout << "End of displaying events:" << std::endl;
@@ -187,9 +189,9 @@ private:
 int main() {
 
 	cout << "!!!Hello World!!!" << endl; // prints !!!Hello World!!!
-	Pipe<Event> pipe;
-	Generator<Event> generator(&pipe);
-	Display<Event> display(&pipe);
+	Pipe<shared_ptr<Event>> pipe;
+	Generator<shared_ptr<Event>> generator(&pipe);
+	Display<shared_ptr<Event>> display(&pipe);
 
 	Pipeline pipeline;
 	pipeline.add(generator);
