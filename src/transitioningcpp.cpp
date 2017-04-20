@@ -9,6 +9,8 @@
 #include <iostream>
 #include <random>
 #include <vector>
+#include<utility>
+#include <memory>
 using namespace std;
 static const char * conditionAsString[] { "Warning", "Caution", "Advisory" };
 
@@ -106,17 +108,17 @@ private:
 
 };
 
-#include<utility>
+
 class Pipe {
 public:
-	void push(EventList&& event) {
-		storage = std::move(event);
+	void push(std::shared_ptr<EventList> event) {
+		storage = event;
 	}
-	EventList pull() {
-		return std::move(storage);
+	std::shared_ptr<EventList> pull() {
+		return storage;
 	}
 private:
-	EventList storage;
+	std::shared_ptr<EventList> storage;
 };
 
 static std::random_device rd;     // only used once to initialise (seed) engine
@@ -129,16 +131,16 @@ public:
 		//Make random event
 		std::uniform_int_distribution<int> uni(1,2); // guaranteed unbiased
 		std::cout << "Creating randomEventList" << std::endl;
-		EventList randomEventList;
+		std::shared_ptr<EventList> randomEventList = std::make_shared<EventList>();
 		int random_size = 1;//uni(rng);
-		randomEventList.reserve(random_size);
+		randomEventList->reserve(random_size);
 
 		for (auto i = 0; i < random_size; i++) {
 			int random_integer = uni(rng);
 			Event::Condition randomCondition(static_cast<Event::Condition>(random_integer));
 			std::string desc(std::string("Event no :") +std::to_string(i));
 
-			randomEventList.emplace_back(randomCondition, desc.c_str());
+			randomEventList->emplace_back(randomCondition, desc.c_str());
 		}
 
 		output->push(std::move(randomEventList));
@@ -155,8 +157,8 @@ public:
 	}
 	void execute() {
 		std::cout << "Beginning of displaying events events:" << std::endl;
-		EventList events = std::move(input->pull());
-		for (Event& event : events) {
+		std::shared_ptr<EventList> events = input->pull();
+		for (Event& event : *events) {
 			std::cout << "Event start" << std::endl;
 			std::cout << event.typeAsString() << std::endl;
 			std::cout << event.what() << std::endl;

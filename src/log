@@ -1,0 +1,38 @@
+!!!Hello World!!!
+Event constructor ran.
+Copy constructor ran.
+Copy constructor ran.
+Event destructor ran.
+Event destructor ran.
+Event constructor ran.
+Copy constructor ran.
+Copy constructor ran.
+Copy constructor ran.
+Event destructor ran.
+Event destructor ran.
+Event destructor ran.
+Copy constructor ran.
+Copy constructor ran.
+Copy constructor ran.
+Copy constructor ran.
+Event destructor ran.
+Event destructor ran.
+Event destructor ran.
+Event destructor ran.
+Copy constructor ran.
+Copy constructor ran.
+Beginning of displaying events events:
+Event start
+2Advisory
+Event no :0
+Event end
+Event start
+1Caution
+Event no :1
+Event end
+End of displaying events:
+Event destructor ran.
+Event destructor ran.
+!!!Goodbye World!!!
+Event destructor ran.
+Event destructor ran.
