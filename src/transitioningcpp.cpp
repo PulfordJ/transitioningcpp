@@ -23,7 +23,7 @@ public:
 	Event(Event&& event) noexcept {
 		this->condition = Event::Condition::WARNING;
 		this->description = nullptr;
-		std::cout << "Event move constructor ran." << std::endl;
+		std::cout << "Event::(Event&&)" << std::endl;
 		swap(*this, event);
 	}
 	void swap(Event& lhs, Event& rhs) {
@@ -32,7 +32,7 @@ public:
 		swap(lhs.description, rhs.description);
 	}
 	Event& operator=(Event other) {
-		std::cout << "Event assignment operator" << std::endl;
+		std::cout << "Event&::operator=(Event)" << std::endl;
 		swap(*this, other);
 		return *this;
 	}
@@ -44,11 +44,11 @@ public:
 			description(new char [strlen(description) + 1]) {
 		strncpy(this->description, description, strlen(description));
 		this->description[strlen(description)] = '\0';
-		std::cout << "Event constructor ran." << std::endl;
+		std::cout << "Event::Event()" << std::endl;
 
 	}
 	~Event() {
-		std::cout << "Event destructor ran." << std::endl;
+		std::cout << "Event::~Event()" << std::endl;
 		delete[] this->description;
 	}
 
@@ -71,15 +71,15 @@ private:
 class EventList {
 public:
 	EventList() {
-		std::cout << "Eventlist default constructor" << std::endl;
+		std::cout << "EventList()" << std::endl;
 	}
 	EventList(EventList&& other) noexcept: EventList() {
-		std::cout << "Eventlist move constructor" << std::endl;
+		std::cout << "EventList(EventList&&)" << std::endl;
 		swap(*this, other);
 	}
 
 	EventList& operator=(EventList&& eventList){
-		std::cout << "Eventlist move assignment" << std::endl;
+		std::cout << "EventList::EventList&&" << std::endl;
 		swap(*this, eventList);
 		return *this;
 	}
@@ -112,7 +112,7 @@ public:
 	void push(EventList&& event) {
 		storage = std::move(event);
 	}
-	EventList&& pull() {
+	EventList pull() {
 		return std::move(storage);
 	}
 private:
@@ -155,7 +155,7 @@ public:
 	}
 	void execute() {
 		std::cout << "Beginning of displaying events events:" << std::endl;
-		EventList&& events = input->pull();
+		EventList events = std::move(input->pull());
 		for (Event& event : events) {
 			std::cout << "Event start" << std::endl;
 			std::cout << event.typeAsString() << std::endl;
