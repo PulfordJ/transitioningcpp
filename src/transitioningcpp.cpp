@@ -52,7 +52,7 @@ public:
 	}
 	~Event() {
 		std::cout << "Event destructor ran." << std::endl;
-		delete this->description;
+		delete[] this->description;
 	}
 
 	Condition type() const {
@@ -63,7 +63,6 @@ public:
 	}
 
 	const char * typeAsString() {
-		std::cout << static_cast<int>(condition);
 		return conditionAsString[static_cast<int>(condition)];
 	}
 
