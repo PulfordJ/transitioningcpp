@@ -75,46 +75,51 @@ private:
 template<class T>
 class EventList {
 public:
-	EventList() {
+	EventList():
+	bufferqueue(std::make_unique<std::queue<T>>())
+	{
 		std::cout << "EventList::EventList()" << std::endl;
 	}
 	~EventList() {
 			std::cout << "EventList::~EventList()" << std::endl;
 	}
+	EventList(EventList&& other) = default;
+	EventList& operator=(EventList&& other) = default;
 
-	void push_back(T element);
+	void push_back(T&& element);
 
 	T pop_front() {
-		T element = std::move(bufferqueue.front());
-		bufferqueue.pop();
+		T element = std::move(bufferqueue->front());
+		bufferqueue->pop();
 		return element;
 	}
+
 	bool empty() {
-		return bufferqueue.empty();
+		return bufferqueue->empty();
 	}
 
 private:
-	std::queue<T> bufferqueue;
+	unique_ptr<std::queue<T>> bufferqueue;
 
 };
 
 template<class T>
-void EventList<T>::push_back(T element) {
-	bufferqueue.emplace(std::move(element));
+void EventList<T>::push_back(T&& element) {
+	bufferqueue->emplace(std::move(element));
 }
 
 
 template<class T>
 class Pipe {
 public:
-	void push(std::shared_ptr<EventList<T>> event) {
-		storage = event;
+	void push(EventList<T>&& event) {
+		storage = std::move(event);
 	}
-	std::shared_ptr<EventList<T>> pull() {
-		return storage;
+	EventList<T> pull() {
+		return std::move(storage);
 	}
 private:
-	std::shared_ptr<EventList<T>> storage;
+	EventList<T> storage;
 };
 
 static std::random_device rd;     // only used once to initialise (seed) engine
@@ -130,19 +135,19 @@ public:
 		//Make random event
 		std::uniform_int_distribution<int> uni(1,2); // guaranteed unbiased
 		std::cout << "Creating randomEventList" << std::endl;
-		std::shared_ptr<EventList<T>> randomEventList = std::make_shared<EventList<T>>();
+		EventList<T> randomEventList;;
 		int random_size = 1;//uni(rng);
 
 		for (auto i = 0; i < random_size; i++) {
 			int random_integer = uni(rng);
 			Event::Condition randomCondition(static_cast<Event::Condition>(random_integer));
 			std::string desc(std::string("Event no :") +std::to_string(i));
-			std::shared_ptr<Event> randomEvent = std::make_shared<Event>(randomCondition, desc.c_str());
+			std::unique_ptr<Event> randomEvent = std::make_unique<Event>(randomCondition, desc.c_str());
 			//Event(randomCondition, desc.c_str());
-			randomEventList->push_back(randomEvent);
+			randomEventList.push_back(std::move(randomEvent));
 		}
 
-		output->push(randomEventList);
+		output->push(std::move(randomEventList));
 	}
 private:
 	Pipe<T> * output;
@@ -157,9 +162,9 @@ public:
 	}
 	void execute() {
 		std::cout << "Beginning of displaying events events:" << std::endl;
-		std::shared_ptr<EventList<T>> events = input->pull();
-		while (!events->empty()){
-			T event = std::move(events->pop_front());
+		EventList<T> events = input->pull();
+		while (!events.empty()){
+			T event = std::move(events.pop_front());
 			std::cout << "Event start" << std::endl;
 			std::cout << event->typeAsString() << std::endl;
 			std::cout << event->what() << std::endl;
@@ -189,9 +194,9 @@ private:
 int main() {
 
 	cout << "!!!Hello World!!!" << endl; // prints !!!Hello World!!!
-	Pipe<shared_ptr<Event>> pipe;
-	Generator<shared_ptr<Event>> generator(&pipe);
-	Display<shared_ptr<Event>> display(&pipe);
+	Pipe<unique_ptr<Event>> pipe;
+	Generator<unique_ptr<Event>> generator(&pipe);
+	Display<unique_ptr<Event>> display(&pipe);
 
 	Pipeline pipeline;
 	pipeline.add(generator);
