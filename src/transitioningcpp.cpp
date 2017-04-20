@@ -29,6 +29,12 @@ public:
 		//}
 		this->description[strlen(event.description)] = '\0';
 	}
+	Event(Event&& event) noexcept {
+		this->condition = Event::Condition::WARNING;
+		this->description = nullptr;
+		std::cout << "Event move constructor ran." << std::endl;
+		swap(*this, event);
+	}
 	void swap(Event& lhs, Event& rhs) {
 		using std::swap;
 		swap(lhs.condition, rhs.condition);
@@ -73,7 +79,27 @@ private:
 
 class EventList {
 public:
-	void push_back(Event event) {
+	EventList() {
+		std::cout << "Eventlist default constructor" << std::endl;
+	}
+	EventList(EventList&& other) noexcept: EventList() {
+		std::cout << "Eventlist move constructor" << std::endl;
+		swap(*this, other);
+	}
+
+	EventList& operator=(EventList&& eventList){
+		std::cout << "Eventlist move assignment" << std::endl;
+		swap(*this, eventList);
+		return *this;
+	}
+	void swap(EventList& lhs, EventList& rhs) {
+		using std::swap;
+		swap(lhs.events, rhs.events);
+	}
+	void emplace_back(Event::Condition condition, const char * desc) {
+		events.emplace(events.end(), condition, desc);
+	}
+	void push_back(Event&& event) {
 		events.push_back(event);
 	}
 	std::vector<Event>::iterator begin() {
@@ -82,7 +108,6 @@ public:
 	std::vector<Event>::iterator end() {
 		return events.end();
 	}
-
 	using value_type = std::vector<Event>::value_type;
 
 private:
@@ -90,13 +115,14 @@ private:
 
 };
 
+#include<utility>
 class Pipe {
 public:
-	void push(EventList event) {
-		storage = event;
+	void push(EventList&& event) {
+		storage = std::move(event);
 	}
 	EventList pull() {
-		return storage;
+		return std::move(storage);
 	}
 private:
 	EventList storage;
@@ -121,11 +147,10 @@ public:
 			int random_integer = uni(rng);
 			Event::Condition randomCondition(static_cast<Event::Condition>(random_integer));
 			std::string desc(std::string("Event no :") +std::to_string(i));
-			Event randomEvent(randomCondition, desc.c_str());
 
-			randomEventList.push_back(randomEvent);
+			randomEventList.emplace_back(randomCondition, desc.c_str());
 		}
-		output->push(randomEventList);
+		output->push(std::move(randomEventList));
 	}
 private:
 	Pipe * output;
