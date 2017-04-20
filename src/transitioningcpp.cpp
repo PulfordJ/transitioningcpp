@@ -20,15 +20,6 @@ public:
 #include <string.h>
 class Event {
 public:
-	Event(const Event& event):
-		description(new char [strlen(event.description) + 1]){
-		std::cout << "Copy constructor ran." << std::endl;
-		this->condition = event.condition;
-		//if (event.description != nullptr) {
-			strncpy(this->description, event.description, strlen(event.description));
-		//}
-		this->description[strlen(event.description)] = '\0';
-	}
 	Event(Event&& event) noexcept {
 		this->condition = Event::Condition::WARNING;
 		this->description = nullptr;
@@ -41,7 +32,7 @@ public:
 		swap(lhs.description, rhs.description);
 	}
 	Event& operator=(Event other) {
-		std::cout << "Assignment operator" << std::endl;
+		std::cout << "Event assignment operator" << std::endl;
 		swap(*this, other);
 		return *this;
 	}
@@ -92,15 +83,15 @@ public:
 		swap(*this, eventList);
 		return *this;
 	}
+	void reserve(size_t size) {
+		events.reserve(size);
+	}
 	void swap(EventList& lhs, EventList& rhs) {
 		using std::swap;
 		swap(lhs.events, rhs.events);
 	}
 	void emplace_back(Event::Condition condition, const char * desc) {
 		events.emplace(events.end(), condition, desc);
-	}
-	void push_back(Event&& event) {
-		events.push_back(event);
 	}
 	std::vector<Event>::iterator begin() {
 		return events.begin();
@@ -121,7 +112,7 @@ public:
 	void push(EventList&& event) {
 		storage = std::move(event);
 	}
-	EventList pull() {
+	EventList&& pull() {
 		return std::move(storage);
 	}
 private:
@@ -137,11 +128,10 @@ public:
 	void execute() {
 		//Make random event
 		std::uniform_int_distribution<int> uni(1,2); // guaranteed unbiased
-
-
+		std::cout << "Creating randomEventList" << std::endl;
 		EventList randomEventList;
-		int random_size = uni(rng);
-		//randomEventList.reserve(random_size);
+		int random_size = 1;//uni(rng);
+		randomEventList.reserve(random_size);
 
 		for (auto i = 0; i < random_size; i++) {
 			int random_integer = uni(rng);
@@ -150,6 +140,7 @@ public:
 
 			randomEventList.emplace_back(randomCondition, desc.c_str());
 		}
+
 		output->push(std::move(randomEventList));
 	}
 private:
@@ -164,7 +155,7 @@ public:
 	}
 	void execute() {
 		std::cout << "Beginning of displaying events events:" << std::endl;
-		EventList events = input->pull();
+		EventList&& events = input->pull();
 		for (Event& event : events) {
 			std::cout << "Event start" << std::endl;
 			std::cout << event.typeAsString() << std::endl;
