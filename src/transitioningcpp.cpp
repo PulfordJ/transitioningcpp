@@ -73,10 +73,13 @@ private:
 class EventList {
 public:
 	EventList() {
-		std::cout << "EventList()" << std::endl;
+		std::cout << "EventList::EventList()" << std::endl;
+	}
+	~EventList() {
+			std::cout << "EventList::~EventList()" << std::endl;
 	}
 	EventList(EventList&& other) noexcept: EventList() {
-		std::cout << "EventList(EventList&&)" << std::endl;
+		std::cout << "EventList::EventList(EventList&&)" << std::endl;
 		swap(*this, other);
 	}
 
