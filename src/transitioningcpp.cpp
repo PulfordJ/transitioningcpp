@@ -119,16 +119,18 @@ private:
 
 static std::random_device rd;     // only used once to initialise (seed) engine
 
+template<class T>
 class Generator : public I_Filter {
 public:
-	Generator(Pipe<Event> * output):output(output),
+	Generator(Pipe<T> * output):output(output),
 		rng(rd()){    // random-number engine used (Mersenne-Twister in this case)
 	}
+
 	void execute() {
 		//Make random event
 		std::uniform_int_distribution<int> uni(1,2); // guaranteed unbiased
 		std::cout << "Creating randomEventList" << std::endl;
-		std::shared_ptr<EventList<Event>> randomEventList = std::make_shared<EventList<Event>>();
+		std::shared_ptr<EventList<Event>> randomEventList = std::make_shared<EventList<T>>();
 		int random_size = 1;//uni(rng);
 
 		for (auto i = 0; i < random_size; i++) {
@@ -186,7 +188,7 @@ int main() {
 
 	cout << "!!!Hello World!!!" << endl; // prints !!!Hello World!!!
 	Pipe<Event> pipe;
-	Generator generator(&pipe);
+	Generator<Event> generator(&pipe);
 	Display<Event> display(&pipe);
 
 	Pipeline pipeline;
