@@ -70,6 +70,9 @@ private:
 	char * description;
 };
 
+#include <queue>
+
+template<class T>
 class EventList {
 public:
 	EventList() {
@@ -78,90 +81,81 @@ public:
 	~EventList() {
 			std::cout << "EventList::~EventList()" << std::endl;
 	}
-	EventList(EventList&& other) noexcept: EventList() {
-		std::cout << "EventList::EventList(EventList&&)" << std::endl;
-		swap(*this, other);
-	}
 
-	EventList& operator=(EventList&& eventList){
-		std::cout << "EventList::EventList&&" << std::endl;
-		swap(*this, eventList);
-		return *this;
+	void push_back(T&& element);
+
+	T pop_front() {
+		T element = std::move(bufferqueue.front());
+		bufferqueue.pop();
+		return element;
 	}
-	void reserve(size_t size) {
-		events.reserve(size);
+	bool empty() {
+		return bufferqueue.empty();
 	}
-	void swap(EventList& lhs, EventList& rhs) {
-		using std::swap;
-		swap(lhs.events, rhs.events);
-	}
-	void emplace_back(Event::Condition condition, const char * desc) {
-		events.emplace(events.end(), condition, desc);
-	}
-	std::vector<Event>::iterator begin() {
-		return events.begin();
-	}
-	std::vector<Event>::iterator end() {
-		return events.end();
-	}
-	using value_type = std::vector<Event>::value_type;
 
 private:
-	std::vector<Event> events;
+	std::queue<T> bufferqueue;
 
 };
 
+template<class T>
+void EventList<T>::push_back(T&& element) {
+	bufferqueue.emplace(std::move(element));
+}
 
+
+template<class T>
 class Pipe {
 public:
-	void push(std::shared_ptr<EventList> event) {
+	void push(std::shared_ptr<EventList<T>> event) {
 		storage = event;
 	}
-	std::shared_ptr<EventList> pull() {
+	std::shared_ptr<EventList<T>> pull() {
 		return storage;
 	}
 private:
-	std::shared_ptr<EventList> storage;
+	std::shared_ptr<EventList<T>> storage;
 };
 
 static std::random_device rd;     // only used once to initialise (seed) engine
+
 class Generator : public I_Filter {
 public:
-	Generator(Pipe * output):output(output),
+	Generator(Pipe<Event> * output):output(output),
 		rng(rd()){    // random-number engine used (Mersenne-Twister in this case)
 	}
 	void execute() {
 		//Make random event
 		std::uniform_int_distribution<int> uni(1,2); // guaranteed unbiased
 		std::cout << "Creating randomEventList" << std::endl;
-		std::shared_ptr<EventList> randomEventList = std::make_shared<EventList>();
+		std::shared_ptr<EventList<Event>> randomEventList = std::make_shared<EventList<Event>>();
 		int random_size = 1;//uni(rng);
-		randomEventList->reserve(random_size);
 
 		for (auto i = 0; i < random_size; i++) {
 			int random_integer = uni(rng);
 			Event::Condition randomCondition(static_cast<Event::Condition>(random_integer));
 			std::string desc(std::string("Event no :") +std::to_string(i));
-
-			randomEventList->emplace_back(randomCondition, desc.c_str());
+			randomEventList->push_back(std::move(Event(randomCondition, desc.c_str())));
 		}
 
-		output->push(std::move(randomEventList));
+		output->push(randomEventList);
 	}
 private:
-	Pipe * output;
+	Pipe<Event> * output;
 	std::mt19937 rng;    // random-number engine used (Mersenne-Twister in this case)
 };
 
+template<class T>
 class Display : public I_Filter{
 public:
-	Display(Pipe * input): input(input) {
+	Display(Pipe<T> * input): input(input) {
 
 	}
 	void execute() {
 		std::cout << "Beginning of displaying events events:" << std::endl;
-		std::shared_ptr<EventList> events = input->pull();
-		for (Event& event : *events) {
+		std::shared_ptr<EventList<T>> events = input->pull();
+		while (!events->empty()){
+			T event = std::move(events->pop_front());
 			std::cout << "Event start" << std::endl;
 			std::cout << event.typeAsString() << std::endl;
 			std::cout << event.what() << std::endl;
@@ -171,7 +165,7 @@ public:
 
 	}
 private:
-	Pipe * input;
+	Pipe<T> * input;
 };
 
 class Pipeline {
@@ -191,9 +185,9 @@ private:
 int main() {
 
 	cout << "!!!Hello World!!!" << endl; // prints !!!Hello World!!!
-	Pipe pipe;
+	Pipe<Event> pipe;
 	Generator generator(&pipe);
-	Display display(&pipe);
+	Display<Event> display(&pipe);
 
 	Pipeline pipeline;
 	pipeline.add(generator);
