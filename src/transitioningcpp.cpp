@@ -72,11 +72,11 @@ private:
 
 #include <queue>
 
-template<class T>
+template<class T, size_t length>
 class EventList {
 public:
 	EventList():
-	bufferqueue(std::make_unique<std::queue<T>>())
+	bufferqueue(std::make_unique<std::array<T, length>>()), start_index(0), end_index(0), count(0)
 	{
 		std::cout << "EventList::EventList()" << std::endl;
 	}
@@ -89,45 +89,59 @@ public:
 	void push_back(T&& element);
 
 	T pop_front() {
-		T element = std::move(bufferqueue->front());
-		bufferqueue->pop();
+		if(count == 0) {
+			throw std::exception();
+		}
+		T element = std::move(bufferqueue->at(start_index));
+		start_index = start_index++ % length;
+		count--;
+
 		return element;
 	}
 
 	bool empty() {
-		return bufferqueue->empty();
+		return count == 0;
 	}
 
 private:
-	unique_ptr<std::queue<T>> bufferqueue;
+	unique_ptr<std::array<T, length>> bufferqueue;
+
+	size_t start_index;
+	size_t end_index;
+	size_t count;
 
 };
 
-template<class T>
-void EventList<T>::push_back(T&& element) {
-	bufferqueue->emplace(std::move(element));
+template<class T, size_t length>
+void EventList<T, length>::push_back(T&& element) {
+	if (count == length) {
+		throw std::exception();
+	}
+		bufferqueue->at(end_index) = std::move(element);
+		end_index = end_index++ % length;
+		count++;
 }
 
 
-template<class T>
+template<class T, size_t length>
 class Pipe {
 public:
-	void push(EventList<T>&& event) {
+	void push(EventList<T, length>&& event) {
 		storage = std::move(event);
 	}
-	EventList<T> pull() {
+	EventList<T, length> pull() {
 		return std::move(storage);
 	}
 private:
-	EventList<T> storage;
+	EventList<T, length> storage;
 };
 
 static std::random_device rd;     // only used once to initialise (seed) engine
 
-template<class T>
+template<class T, size_t length>
 class Generator : public I_Filter {
 public:
-	Generator(Pipe<T> * output):output(output),
+	Generator(Pipe<T, length> * output):output(output),
 		rng(rd()){    // random-number engine used (Mersenne-Twister in this case)
 	}
 
@@ -135,7 +149,7 @@ public:
 		//Make random event
 		std::uniform_int_distribution<int> uni(1,2); // guaranteed unbiased
 		std::cout << "Creating randomEventList" << std::endl;
-		EventList<T> randomEventList;;
+		EventList<T, length> randomEventList;;
 		int random_size = 1;//uni(rng);
 
 		for (auto i = 0; i < random_size; i++) {
@@ -150,19 +164,19 @@ public:
 		output->push(std::move(randomEventList));
 	}
 private:
-	Pipe<T> * output;
+	Pipe<T, length> * output;
 	std::mt19937 rng;    // random-number engine used (Mersenne-Twister in this case)
 };
 
-template<class T>
+template<class T, size_t length>
 class Display : public I_Filter{
 public:
-	Display(Pipe<T> * input): input(input) {
+	Display(Pipe<T, length> * input): input(input) {
 
 	}
 	void execute() {
 		std::cout << "Beginning of displaying events events:" << std::endl;
-		EventList<T> events = input->pull();
+		EventList<T, length> events = input->pull();
 		while (!events.empty()){
 			T event = std::move(events.pop_front());
 			std::cout << "Event start" << std::endl;
@@ -174,7 +188,7 @@ public:
 
 	}
 private:
-	Pipe<T> * input;
+	Pipe<T, length> * input;
 };
 
 class Pipeline {
@@ -194,9 +208,9 @@ private:
 int main() {
 
 	cout << "!!!Hello World!!!" << endl; // prints !!!Hello World!!!
-	Pipe<unique_ptr<Event>> pipe;
-	Generator<unique_ptr<Event>> generator(&pipe);
-	Display<unique_ptr<Event>> display(&pipe);
+	Pipe<unique_ptr<Event>, 2> pipe;
+	Generator<unique_ptr<Event>, 2> generator(&pipe);
+	Display<unique_ptr<Event>, 2> display(&pipe);
 
 	Pipeline pipeline;
 	pipeline.add(generator);
