@@ -13,6 +13,7 @@
 #include <memory>
 #include <algorithm>
 #include <thread>
+#include <mutex>
 using namespace std;
 static const char * conditionAsString[] { "Warning", "Caution", "Advisory" };
 
@@ -88,14 +89,14 @@ private:
 template<class T, size_t length>
 class EventList {
 public:
-	using value_type = typename std::vector<T>::value_type;
+	using value_type = typename std::array<T, length>::value_type;
 	EventList():
-	bufferqueue(std::make_unique<std::vector<T>>()), start_index(0), end_index(0), count(0)
+	bufferqueue(std::make_unique<std::array<T, length>>()), start_index(0), end_index(0), count(0)
 	{
 		std::cout << "EventList::EventList()" << std::endl;
 	}
 	~EventList() {
-			std::cout << "EventList::~EventList()" << std::endl;
+		std::cout << "EventList::~EventList()" << std::endl;
 	}
 	EventList(EventList&& other) = default;
 	EventList& operator=(EventList&& other) = default;
@@ -103,11 +104,17 @@ public:
 	void push_back(T&& element);
 
 	T pop_front() {
+		std::cout << "EventList::pop_front()" << std::endl;
+		std::cout << "EventList::start_index " << start_index << std::endl;
+		std::cout << "EventList::end_index " << end_index << std::endl;
+		std::cout << "EventList::count " << count << std::endl;
+
 		if(count == 0) {
 			throw std::exception();
 		}
-		T element = bufferqueue->at(0);
-		bufferqueue->erase(bufferqueue->begin());
+		std::cout << "EvnetList::push_back() no exception" << std::endl;
+		T element = bufferqueue->at(start_index);
+		start_index = (start_index + 1) % length;
 		count--;
 		return element;
 	}
@@ -120,37 +127,28 @@ public:
 		return count == 0;
 	}
 
-	auto begin() {
-		return bufferqueue->begin();
-	}
-
-	std::vector<Event>::iterator end() {
-		return bufferqueue->end();
-	}
-
-	void erase(std::vector<Event>::iterator a, std::vector<Event>::iterator b) {
-		bufferqueue->erase(a, b);
-		count = bufferqueue->size();
-	}
-
 private:
-	unique_ptr<std::vector<Event>> bufferqueue;
+	unique_ptr<std::array<Event, length>> bufferqueue;
 
 	size_t start_index;
 	size_t end_index;
 	size_t count;
-
 };
 
 template<class T, size_t length>
 void EventList<T, length>::push_back(T&& element) {
+	std::cout << "EventList::push_back()" << std::endl;
+			std::cout << "EventList::start_index " << start_index << std::endl;
+			std::cout << "EventList::end_index " << end_index << std::endl;
+			std::cout << "EventList::count " << count << std::endl;
 	if (count == length) {
 		throw std::exception();
 	}
-		bufferqueue->push_back(element);
+		bufferqueue->at(end_index);
+		end_index = (end_index + 1) % length;
 		count++;
 }
-#include <mutex>
+
 
 template<class T, size_t length>
 class Pipe {
@@ -202,7 +200,7 @@ public:
 		//Make random event
 		std::cout << "Creating randomEventList" << std::endl;
 		EventList<T, length> randomEventList;;
-		int random_size = 10;
+		int random_size = 1;
 
 		std::generate_n(back_inserter(randomEventList), random_size, makeRandomEvent);
 
@@ -224,38 +222,18 @@ public:
 		if (input->isEmpty()) return;
 		EventList<T, length> events = input->pull();
 		while (!events.empty()){
+			std::cout << "events::count()" << events.getCount() << std::endl;
 			T event = std::move(events.pop_front());
 			std::cout << "Event start" << std::endl;
 			std::cout << event.typeAsString() << std::endl;
 			std::cout << event.what() << std::endl;
 			std::cout << "Event end" << std::endl;
 		}
-
-
 		std::cout << "End of displaying events:" << std::endl;
 
 	}
 private:
 	Pipe<T, length> * input;
-};
-
-template<class T, size_t length>
-class IDFilter: public I_Filter {
-public:
-	IDFilter(Pipe<T, length> * input, Pipe<T, length> * output): input(input), output(output) {
-
-	}
-	void execute() {
-		if (!input->isEmpty()) {
-			EventList<T, length> events = input->pull();
-			vector<Event>::iterator it = std::remove_if(events.begin(), events.end(), [](Event event){return event.type() != Event::Condition::WARNING;});
-			events.erase(it, events.end());
-			output->push(std::move(events));
-		}
-	}
-private:
-	Pipe<T, length> * input;
-	Pipe<T, length> * output;
 };
 
 class Pipeline {
@@ -277,11 +255,12 @@ int main() {
 
 	cout << "!!!Hello World!!!" << endl; // prints !!!Hello World!!!
 	Pipe<Event, 10> pipe;
-	Generator<Event, 10> generator(&pipe);
 
-	Pipe<Event, 10> pipeIdFilterToDisplay;
-	IDFilter<Event, 10> idFilter(&pipe, &pipeIdFilterToDisplay);
-	Display<Event, 10> display(&pipeIdFilterToDisplay);
+	Generator<Event, 10> generator(&pipe);
+	Display<Event, 10> display(&pipe);
+
+	generator.execute();
+	display.execute();
 
 	//Pipeline pipeline;
 	//generator.execute();
@@ -291,15 +270,14 @@ int main() {
 		while(true) runnable.execute();
 		std::this_thread::sleep_for(delay);
 	};
-	std::thread generatorThread {run_policy, std::ref(generator), 2000ms};
-	std::thread displaythread { run_policy, std::ref(display) };
-	std::thread idFilterThread { run_policy, std::ref(idFilter) };
+	//std::thread generatorThread {run_policy, std::ref(generator), 2000ms};
+	//std::thread displaythread { run_policy, std::ref(display) };
 
 	//display.execute();
 
 	//pipeline.run();
 
-	while (true);
+	//while (true);
 	cout << "!!!Goodbye World!!!" << endl; // prints !!!Hello World!!!
 	return 0;
 }
