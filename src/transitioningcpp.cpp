@@ -11,6 +11,7 @@
 #include <vector>
 #include<utility>
 #include <memory>
+#include <algorithm>
 using namespace std;
 static const char * conditionAsString[] { "Warning", "Caution", "Advisory" };
 
@@ -41,14 +42,25 @@ public:
 	enum class Condition {
 		WARNING, CAUTION, ADVISORY
 	};
+	Event() {
+		std::cout << "Event::Event()" << std::endl;
+	}
 	Event(Condition condition, const char * description) :
 			condition(condition),
 			description(new char [strlen(description) + 1]) {
 		strncpy(this->description, description, strlen(description));
 		this->description[strlen(description)] = '\0';
-		std::cout << "Event::Event()" << std::endl;
+		std::cout << "Event::Event(Condition, const char *)" << std::endl;
 
 	}
+	Event(const Event& other) :
+		condition(other.condition),
+		description(new char [strlen(other.description) + 1]) {
+	strncpy(this->description, other.description, strlen(other.description));
+	this->description[strlen(other.description)] = '\0';
+	std::cout << "Event::Event(Event&)" << std::endl;
+
+}
 	~Event() {
 		std::cout << "Event::~Event()" << std::endl;
 		delete[] this->description;
@@ -75,9 +87,9 @@ private:
 template<class T, size_t length>
 class EventList {
 public:
-	using value_type = typename std::array<T, length>::value_type;
+	using value_type = typename std::vector<T>::value_type;
 	EventList():
-	bufferqueue(std::make_unique<std::array<T, length>>()), start_index(0), end_index(0), count(0)
+	bufferqueue(std::make_unique<std::vector<T>>()), start_index(0), end_index(0), count(0)
 	{
 		std::cout << "EventList::EventList()" << std::endl;
 	}
@@ -93,10 +105,9 @@ public:
 		if(count == 0) {
 			throw std::exception();
 		}
-		T element = std::move(bufferqueue->at(start_index));
-		start_index = ++start_index % length;
+		T element = bufferqueue->at(0);
+		bufferqueue->erase(bufferqueue->begin());
 		count--;
-
 		return element;
 	}
 
@@ -108,8 +119,21 @@ public:
 		return count == 0;
 	}
 
+	auto begin() {
+		return bufferqueue->begin();
+	}
+
+	std::vector<Event>::iterator end() {
+		return bufferqueue->end();
+	}
+
+	void erase(std::vector<Event>::iterator a, std::vector<Event>::iterator b) {
+		bufferqueue->erase(a, b);
+		count = bufferqueue->size();
+	}
+
 private:
-	unique_ptr<std::array<T, length>> bufferqueue;
+	unique_ptr<std::vector<Event>> bufferqueue;
 
 	size_t start_index;
 	size_t end_index;
@@ -122,8 +146,7 @@ void EventList<T, length>::push_back(T&& element) {
 	if (count == length) {
 		throw std::exception();
 	}
-		bufferqueue->at(end_index) = std::move(element);
-		end_index = ++end_index % length;
+		bufferqueue->push_back(element);
 		count++;
 }
 
@@ -146,16 +169,16 @@ static std::mt19937 rng(rd());    // random-number engine used (Mersenne-Twister
 
 
 
-std::unique_ptr<Event> makeRandomEvent() {
+Event makeRandomEvent() {
 	static int eventNum = 0;
 	std::uniform_int_distribution<int> uni(0,2); // guaranteed unbiased
 	int random_integer = uni(rng);
 	Event::Condition randomCondition(static_cast<Event::Condition>(random_integer));
 	std::string desc(std::string("Event no :") +std::to_string(++eventNum));
-	std::unique_ptr<Event> randomEvent = std::make_unique<Event>(randomCondition, desc.c_str());
+	Event randomEvent(randomCondition, desc.c_str());
 	return randomEvent;
 }
-#include <algorithm>
+
 
 template<class T, size_t length>
 class Generator : public I_Filter {
@@ -167,7 +190,7 @@ public:
 		//Make random event
 		std::cout << "Creating randomEventList" << std::endl;
 		EventList<T, length> randomEventList;;
-		int random_size = 2;
+		int random_size = 10;
 
 		std::generate_n(back_inserter(randomEventList), random_size, makeRandomEvent);
 
@@ -190,8 +213,8 @@ public:
 		while (!events.empty()){
 			T event = std::move(events.pop_front());
 			std::cout << "Event start" << std::endl;
-			std::cout << event->typeAsString() << std::endl;
-			std::cout << event->what() << std::endl;
+			std::cout << event.typeAsString() << std::endl;
+			std::cout << event.what() << std::endl;
 			std::cout << "Event end" << std::endl;
 		}
 		std::cout << "End of displaying events:" << std::endl;
@@ -199,6 +222,23 @@ public:
 	}
 private:
 	Pipe<T, length> * input;
+};
+
+template<class T, size_t length>
+class IDFilter: public I_Filter {
+public:
+	IDFilter(Pipe<T, length> * input, Pipe<T, length> * output): input(input), output(output) {
+
+	}
+	void execute() {
+		EventList<T, length> events = input->pull();
+		vector<Event>::iterator it = std::remove_if(events.begin(), events.end(), [](Event event){return event.type() != Event::Condition::WARNING;});
+		events.erase(it, events.end());
+		output->push(std::move(events));
+	}
+private:
+	Pipe<T, length> * input;
+	Pipe<T, length> * output;
 };
 
 class Pipeline {
@@ -218,12 +258,16 @@ private:
 int main() {
 
 	cout << "!!!Hello World!!!" << endl; // prints !!!Hello World!!!
-	Pipe<unique_ptr<Event>, 2> pipe;
-	Generator<unique_ptr<Event>, 2> generator(&pipe);
-	Display<unique_ptr<Event>, 2> display(&pipe);
+	Pipe<Event, 10> pipe;
+	Generator<Event, 10> generator(&pipe);
+
+	Pipe<Event, 10> pipeIdFilterToDisplay;
+	IDFilter<Event, 10> idFilter(&pipe, &pipeIdFilterToDisplay);
+	Display<Event, 10> display(&pipeIdFilterToDisplay);
 
 	Pipeline pipeline;
 	pipeline.add(generator);
+	pipeline.add(idFilter);
 	pipeline.add(display);
 
 	pipeline.run();
