@@ -75,6 +75,7 @@ private:
 template<class T, size_t length>
 class EventList {
 public:
+	using value_type = typename std::array<T, length>::value_type;
 	EventList():
 	bufferqueue(std::make_unique<std::array<T, length>>()), start_index(0), end_index(0), count(0)
 	{
@@ -93,10 +94,14 @@ public:
 			throw std::exception();
 		}
 		T element = std::move(bufferqueue->at(start_index));
-		start_index = start_index++ % length;
+		start_index = ++start_index % length;
 		count--;
 
 		return element;
+	}
+
+	size_t getCount() {
+		return count;
 	}
 
 	bool empty() {
@@ -118,7 +123,7 @@ void EventList<T, length>::push_back(T&& element) {
 		throw std::exception();
 	}
 		bufferqueue->at(end_index) = std::move(element);
-		end_index = end_index++ % length;
+		end_index = ++end_index % length;
 		count++;
 }
 
@@ -137,35 +142,40 @@ private:
 };
 
 static std::random_device rd;     // only used once to initialise (seed) engine
+static std::mt19937 rng(rd());    // random-number engine used (Mersenne-Twister in this case)
+
+
+
+std::unique_ptr<Event> makeRandomEvent() {
+	static int eventNum = 0;
+	std::uniform_int_distribution<int> uni(0,2); // guaranteed unbiased
+	int random_integer = uni(rng);
+	Event::Condition randomCondition(static_cast<Event::Condition>(random_integer));
+	std::string desc(std::string("Event no :") +std::to_string(++eventNum));
+	std::unique_ptr<Event> randomEvent = std::make_unique<Event>(randomCondition, desc.c_str());
+	return randomEvent;
+}
+#include <algorithm>
 
 template<class T, size_t length>
 class Generator : public I_Filter {
 public:
-	Generator(Pipe<T, length> * output):output(output),
-		rng(rd()){    // random-number engine used (Mersenne-Twister in this case)
+	Generator(Pipe<T, length> * output):output(output){    // random-number engine used (Mersenne-Twister in this case)
 	}
 
 	void execute() {
 		//Make random event
-		std::uniform_int_distribution<int> uni(1,2); // guaranteed unbiased
 		std::cout << "Creating randomEventList" << std::endl;
 		EventList<T, length> randomEventList;;
-		int random_size = 1;//uni(rng);
+		int random_size = 2;
 
-		for (auto i = 0; i < random_size; i++) {
-			int random_integer = uni(rng);
-			Event::Condition randomCondition(static_cast<Event::Condition>(random_integer));
-			std::string desc(std::string("Event no :") +std::to_string(i));
-			std::unique_ptr<Event> randomEvent = std::make_unique<Event>(randomCondition, desc.c_str());
-			//Event(randomCondition, desc.c_str());
-			randomEventList.push_back(std::move(randomEvent));
-		}
+		std::generate_n(back_inserter(randomEventList), random_size, makeRandomEvent);
 
 		output->push(std::move(randomEventList));
 	}
 private:
 	Pipe<T, length> * output;
-	std::mt19937 rng;    // random-number engine used (Mersenne-Twister in this case)
+
 };
 
 template<class T, size_t length>
