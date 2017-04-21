@@ -150,26 +150,30 @@ void EventList<T, length>::push_back(T&& element) {
 		bufferqueue->push_back(element);
 		count++;
 }
-
+#include <mutex>
 
 template<class T, size_t length>
 class Pipe {
 public:
 	void push(EventList<T, length>&& event) {
+		std::lock_guard<std::mutex> lock(mutex);
 		storage = std::move(event);
 		empty = false;
 	}
 	EventList<T, length> pull() {
+		std::lock_guard<std::mutex> lock(mutex);
 		empty = true;
 		return std::move(storage);
 
 	}
 	bool isEmpty() {
+		std::lock_guard<std::mutex> lock(mutex);
 		return empty;
 	}
 private:
 	EventList<T, length> storage;
 	bool empty = true;
+	std::mutex mutex;
 };
 
 static std::random_device rd;     // only used once to initialise (seed) engine
