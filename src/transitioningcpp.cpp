@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <thread>
 #include <mutex>
+#include <condition_variable>
 using namespace std;
 static const char * conditionAsString[] { "Warning", "Caution", "Advisory" };
 
@@ -83,7 +84,8 @@ class EventList {
 public:
 	using value_type = typename std::array<T, length>::value_type;
 	EventList():
-	bufferqueue(std::make_unique<std::array<T, length>>()), start_index(0), end_index(0), count(0)
+	bufferqueue(std::make_unique<std::array<T, length>>()), start_index(0), end_index(0), count(0),
+	buffermutex(std::make_unique<std::mutex>()),hasSpace(std::make_unique<std::condition_variable>()),hasData(std::make_unique<std::condition_variable>())
 	{
 		std::cout << "EventList::EventList()" << std::endl;
 	}
@@ -97,17 +99,20 @@ public:
 
 	T pop_front() {
 		std::cout << "EventList::pop_front()" << std::endl;
-		std::cout << "EventList::start_index " << start_index << std::endl;
-		std::cout << "EventList::end_index " << end_index << std::endl;
-		std::cout << "EventList::count " << count << std::endl;
 
+		unique_lock<std::mutex> guard(*buffermutex);
+		hasData->wait(guard, [this]{return count != 0;});
 		if(count == 0) {
 			throw std::exception();
 		}
-		std::cout << "EvnetList::push_back() no exception" << std::endl;
+
+		std::cout << "EventList::start_index " << start_index << std::endl;
+		std::cout << "EventList::end_index " << end_index << std::endl;
+		std::cout << "EventList::count " << count << std::endl;
 		T element = std::move(bufferqueue->at(start_index));
 		start_index = (start_index + 1) % length;
 		count--;
+		hasSpace->notify_all();
 		return element;
 	}
 
@@ -125,46 +130,31 @@ private:
 	size_t start_index;
 	size_t end_index;
 	size_t count;
+	unique_ptr<std::mutex> buffermutex;
+	unique_ptr<std::condition_variable> hasSpace;
+	unique_ptr<std::condition_variable> hasData;
 };
 
 template<class T, size_t length>
 void EventList<T, length>::push_back(T&& element) {
 	std::cout << "EventList::push_back()" << std::endl;
-			std::cout << "EventList::start_index " << start_index << std::endl;
-			std::cout << "EventList::end_index " << end_index << std::endl;
-			std::cout << "EventList::count " << count << std::endl;
+
+	unique_lock<std::mutex> guard(*buffermutex);
+	hasSpace->wait(guard, [this]{return count != length;});
+
+		std::cout << "EventList::start_index " << start_index << std::endl;
+		std::cout << "EventList::end_index " << end_index << std::endl;
+		std::cout << "EventList::count " << count << std::endl;
+
 	if (count == length) {
 		throw std::exception();
 	}
 		bufferqueue->at(end_index);
 		end_index = (end_index + 1) % length;
 		count++;
+	hasData->notify_all();
 }
 
-
-template<class T, size_t length>
-class Pipe {
-public:
-	void push(EventList<T, length>&& event) {
-		std::lock_guard<std::mutex> lock(mutex);
-		storage = std::move(event);
-		empty = false;
-	}
-	EventList<T, length> pull() {
-		std::lock_guard<std::mutex> lock(mutex);
-		empty = true;
-		return std::move(storage);
-
-	}
-	bool isEmpty() {
-		std::lock_guard<std::mutex> lock(mutex);
-		return empty;
-	}
-private:
-	EventList<T, length> storage;
-	bool empty = true;
-	std::mutex mutex;
-};
 
 static std::random_device rd;     // only used once to initialise (seed) engine
 static std::mt19937 rng(rd());    // random-number engine used (Mersenne-Twister in this case)
@@ -185,37 +175,34 @@ Event makeRandomEvent() {
 template<class T, size_t length>
 class Generator : public I_Filter {
 public:
-	Generator(Pipe<T, length> * output):output(output){    // random-number engine used (Mersenne-Twister in this case)
+	Generator(EventList<T, length> * output):output(output){    // random-number engine used (Mersenne-Twister in this case)
 	}
 
 	void execute() {
 		//Make random event
 		std::cout << "Creating randomEventList" << std::endl;
-		EventList<T, length> randomEventList;;
+
+		shared_ptr<EventList<T, length>> randomEventList = std::make_shared<EventList<T, length>>();
 		int random_size = 1;
 
-		std::generate_n(back_inserter(randomEventList), random_size, makeRandomEvent);
-
-		output->push(std::move(randomEventList));
+		std::generate_n(back_inserter(*randomEventList), random_size, makeRandomEvent);
 	}
 private:
-	Pipe<T, length> * output;
+	EventList<T, length> * output;
 
 };
 
 template<class T, size_t length>
 class Display : public I_Filter{
 public:
-	Display(Pipe<T, length> * input): input(input) {
+	Display(EventList<T, length> * input): input(input) {
 
 	}
 	void execute() {
 		std::cout << "Beginning of displaying events events:" << std::endl;
-		if (input->isEmpty()) return;
-		EventList<T, length> events = input->pull();
-		while (!events.empty()){
-			std::cout << "events::count()" << events.getCount() << std::endl;
-			T event = std::move(events.pop_front());
+		while (!input->empty()){
+			std::cout << "events::count()" << input->getCount() << std::endl;
+			T event = std::move(input->pop_front());
 			std::cout << "Event start" << std::endl;
 			std::cout << event.typeAsString() << std::endl;
 			std::cout << event.what() << std::endl;
@@ -225,7 +212,7 @@ public:
 
 	}
 private:
-	Pipe<T, length> * input;
+	EventList<T, length> * input;
 };
 
 class Pipeline {
@@ -246,10 +233,12 @@ private:
 int main() {
 
 	cout << "!!!Hello World!!!" << endl; // prints !!!Hello World!!!
-	Pipe<Event, 1> pipe;
+	//EventList<Event, 1> pipe;
 
-	Generator<Event, 1> generator(&pipe);
-	Display<Event, 1> display(&pipe);
+	EventList<Event, 1> eventList;
+
+	Generator<Event, 1> generator(&eventList);
+	Display<Event, 1> display(&eventList);
 
 	auto run_policy = [](I_Filter& runnable, std::chrono::milliseconds delay = 0ms) {
 		while(true) runnable.execute();
@@ -257,6 +246,9 @@ int main() {
 	};
 	std::thread generatorThread {run_policy, std::ref(generator), 2000ms};
 	std::thread displaythread { run_policy, std::ref(display) };
+
+	//generator.execute();
+	//display.execute();
 
 	while (true);
 	cout << "!!!Goodbye World!!!" << endl; // prints !!!Hello World!!!
