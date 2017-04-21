@@ -12,6 +12,7 @@
 #include<utility>
 #include <memory>
 #include <algorithm>
+#include <thread>
 using namespace std;
 static const char * conditionAsString[] { "Warning", "Caution", "Advisory" };
 
@@ -156,12 +157,19 @@ class Pipe {
 public:
 	void push(EventList<T, length>&& event) {
 		storage = std::move(event);
+		empty = false;
 	}
 	EventList<T, length> pull() {
+		empty = true;
 		return std::move(storage);
+
+	}
+	bool isEmpty() {
+		return empty;
 	}
 private:
 	EventList<T, length> storage;
+	bool empty = true;
 };
 
 static std::random_device rd;     // only used once to initialise (seed) engine
@@ -209,6 +217,7 @@ public:
 	}
 	void execute() {
 		std::cout << "Beginning of displaying events events:" << std::endl;
+		if (input->isEmpty()) return;
 		EventList<T, length> events = input->pull();
 		while (!events.empty()){
 			T event = std::move(events.pop_front());
@@ -217,6 +226,8 @@ public:
 			std::cout << event.what() << std::endl;
 			std::cout << "Event end" << std::endl;
 		}
+
+
 		std::cout << "End of displaying events:" << std::endl;
 
 	}
@@ -231,10 +242,12 @@ public:
 
 	}
 	void execute() {
-		EventList<T, length> events = input->pull();
-		vector<Event>::iterator it = std::remove_if(events.begin(), events.end(), [](Event event){return event.type() != Event::Condition::WARNING;});
-		events.erase(it, events.end());
-		output->push(std::move(events));
+		if (!input->isEmpty()) {
+			EventList<T, length> events = input->pull();
+			vector<Event>::iterator it = std::remove_if(events.begin(), events.end(), [](Event event){return event.type() != Event::Condition::WARNING;});
+			events.erase(it, events.end());
+			output->push(std::move(events));
+		}
 	}
 private:
 	Pipe<T, length> * input;
@@ -255,6 +268,7 @@ private:
 	std::vector<I_Filter *> filters;
 };
 
+#include <chrono>
 int main() {
 
 	cout << "!!!Hello World!!!" << endl; // prints !!!Hello World!!!
@@ -265,12 +279,23 @@ int main() {
 	IDFilter<Event, 10> idFilter(&pipe, &pipeIdFilterToDisplay);
 	Display<Event, 10> display(&pipeIdFilterToDisplay);
 
-	Pipeline pipeline;
-	pipeline.add(generator);
-	pipeline.add(idFilter);
-	pipeline.add(display);
+	//Pipeline pipeline;
+	//generator.execute();
 
-	pipeline.run();
+
+	auto run_policy = [](I_Filter& runnable, std::chrono::milliseconds delay = 0ms) {
+		while(true) runnable.execute();
+		std::this_thread::sleep_for(delay);
+	};
+	std::thread generatorThread {run_policy, std::ref(generator), 2000ms};
+	std::thread displaythread { run_policy, std::ref(display) };
+	std::thread idFilterThread { run_policy, std::ref(idFilter) };
+
+	//display.execute();
+
+	//pipeline.run();
+
+	while (true);
 	cout << "!!!Goodbye World!!!" << endl; // prints !!!Hello World!!!
 	return 0;
 }
