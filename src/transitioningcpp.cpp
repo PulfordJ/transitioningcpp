@@ -36,7 +36,7 @@ public:
 		swap(lhs.condition, rhs.condition);
 		swap(lhs.description, rhs.description);
 	}
-	Event& operator=(Event other) {
+	Event& operator=(Event&& other) {
 		std::cout << "Event&::operator=(Event)" << std::endl;
 		swap(*this, other);
 		return *this;
@@ -44,7 +44,7 @@ public:
 	enum class Condition {
 		WARNING, CAUTION, ADVISORY
 	};
-	Event() {
+	Event(): Event(Event::Condition::WARNING, "Warning.") {
 		std::cout << "Event::Event()" << std::endl;
 	}
 	Event(Condition condition, const char * description) :
@@ -55,14 +55,6 @@ public:
 		std::cout << "Event::Event(Condition, const char *)" << std::endl;
 
 	}
-	Event(const Event& other) :
-		condition(other.condition),
-		description(new char [strlen(other.description) + 1]) {
-	strncpy(this->description, other.description, strlen(other.description));
-	this->description[strlen(other.description)] = '\0';
-	std::cout << "Event::Event(Event&)" << std::endl;
-
-}
 	~Event() {
 		std::cout << "Event::~Event()" << std::endl;
 		delete[] this->description;
@@ -113,7 +105,7 @@ public:
 			throw std::exception();
 		}
 		std::cout << "EvnetList::push_back() no exception" << std::endl;
-		T element = bufferqueue->at(start_index);
+		T element = std::move(bufferqueue->at(start_index));
 		start_index = (start_index + 1) % length;
 		count--;
 		return element;
@@ -254,30 +246,19 @@ private:
 int main() {
 
 	cout << "!!!Hello World!!!" << endl; // prints !!!Hello World!!!
-	Pipe<Event, 10> pipe;
+	Pipe<Event, 1> pipe;
 
-	Generator<Event, 10> generator(&pipe);
-	Display<Event, 10> display(&pipe);
-
-	generator.execute();
-	display.execute();
-
-	//Pipeline pipeline;
-	//generator.execute();
-
+	Generator<Event, 1> generator(&pipe);
+	Display<Event, 1> display(&pipe);
 
 	auto run_policy = [](I_Filter& runnable, std::chrono::milliseconds delay = 0ms) {
 		while(true) runnable.execute();
 		std::this_thread::sleep_for(delay);
 	};
-	//std::thread generatorThread {run_policy, std::ref(generator), 2000ms};
-	//std::thread displaythread { run_policy, std::ref(display) };
+	std::thread generatorThread {run_policy, std::ref(generator), 2000ms};
+	std::thread displaythread { run_policy, std::ref(display) };
 
-	//display.execute();
-
-	//pipeline.run();
-
-	//while (true);
+	while (true);
 	cout << "!!!Goodbye World!!!" << endl; // prints !!!Hello World!!!
 	return 0;
 }
